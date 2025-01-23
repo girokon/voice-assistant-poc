@@ -1,34 +1,69 @@
 import { useState } from 'react';
-import reactLogo from './assets/react.svg';
-import viteLogo from '/vite.svg';
 import './App.css';
+import { useAudioRecorder } from './hooks/useAudioRecorder';
+import { sendAudioToServer } from './services/api';
+
+function VoiceIndicator({
+  status,
+}: {
+  status: 'idle' | 'listening' | 'responding';
+}) {
+  return (
+    <div
+      className={`voice-indicator ${status}`}
+      aria-label={`Voice assistant is ${status}`}
+    />
+  );
+}
 
 function App() {
-  const [count, setCount] = useState(0);
+  const [status, setStatus] = useState<'idle' | 'listening' | 'responding'>(
+    'idle'
+  );
+  const [recognizedText, setRecognizedText] = useState<string>('');
+  const { startRecording, stopRecording, isRecording, error } =
+    useAudioRecorder();
+
+  const handleIndicatorClick = async () => {
+    try {
+      if (!isRecording) {
+        await startRecording();
+        setStatus('listening');
+        setRecognizedText('Listening...');
+      } else {
+        setStatus('responding');
+        setRecognizedText('Processing...');
+        const audioBlob = await stopRecording();
+
+        await sendAudioToServer(audioBlob);
+
+        // Return to initial state after sending
+        setStatus('idle');
+        setRecognizedText('Audio sent to server');
+      }
+    } catch (err) {
+      setStatus('idle');
+      setRecognizedText(
+        `Error: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+    <div className="app-container">
+      <div className="voice-container">
+        <button
+          className="voice-button"
+          onClick={handleIndicatorClick}
+          aria-label="Toggle voice input"
+        >
+          <VoiceIndicator status={status} />
         </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
+        {(recognizedText || error) && (
+          <p className="recognized-text">{error || recognizedText}</p>
+        )}
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   );
 }
 
