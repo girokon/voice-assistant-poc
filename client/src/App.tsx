@@ -23,6 +23,17 @@ function App() {
   const [recognizedText, setRecognizedText] = useState<string>('');
   const [lastRecording, setLastRecording] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string>('');
+
+  const setWakeWordDetectionState = (isDetecting: boolean) => {
+    if (isDetecting) {
+      setStatus('detecting');
+      setRecognizedText('Ожидаю ключевое слово "привет"...');
+    } else {
+      setStatus('idle');
+      setRecognizedText('');
+    }
+  };
+
   const {
     stopRecording,
     isRecording,
@@ -44,8 +55,7 @@ function App() {
       try {
         await sendAudioToServer(audioBlob);
         startWakeWordDetection();
-        setStatus('detecting');
-        setRecognizedText('Ожидаю ключевое слово "привет"...');
+        setWakeWordDetectionState(true);
       } catch (err) {
         setStatus('idle');
         setRecognizedText(
@@ -56,15 +66,13 @@ function App() {
   });
 
   useEffect(() => {
-    // Start wake word detection when component mounts
     startWakeWordDetection();
-    setStatus('detecting');
-    setRecognizedText('Ожидаю ключевое слово "привет"...');
+    setWakeWordDetectionState(true);
 
     return () => {
       stopWakeWordDetection();
     };
-  }, []); // Empty dependencies since we only want this to run once on mount
+  }, []);
 
   useEffect(() => {
     if (isRecording) {
@@ -72,13 +80,6 @@ function App() {
       setRecognizedText('Слушаю...');
     }
   }, [isRecording]);
-
-  useEffect(() => {
-    if (isListeningForWakeWord && !isRecording) {
-      setStatus('detecting');
-      setRecognizedText('Ожидаю ключевое слово "привет"...');
-    }
-  }, [isListeningForWakeWord, isRecording]);
 
   useEffect(() => {
     if (lastRecording) {
@@ -94,30 +95,22 @@ function App() {
 
   const handleIndicatorClick = async () => {
     try {
-      if (!isRecording) {
-        if (isListeningForWakeWord) {
-          // Stop wake word detection
-          stopWakeWordDetection();
-          setStatus('idle');
-          setRecognizedText('');
-        } else {
-          // Start wake word detection
-          startWakeWordDetection();
-          setStatus('detecting');
-          setRecognizedText('Ожидаю ключевое слово "привет"...');
-        }
-      } else {
+      if (isRecording) {
         setStatus('responding');
         setRecognizedText('Обработка...');
         const audioBlob = await stopRecording();
         setLastRecording(audioBlob);
-
         await sendAudioToServer(audioBlob);
-
-        // Return to wake word detection
         startWakeWordDetection();
-        setStatus('detecting');
-        setRecognizedText('Ожидаю ключевое слово "привет"...');
+        setWakeWordDetectionState(true);
+      } else {
+        if (isListeningForWakeWord) {
+          stopWakeWordDetection();
+          setWakeWordDetectionState(false);
+        } else {
+          startWakeWordDetection();
+          setWakeWordDetectionState(true);
+        }
       }
     } catch (err) {
       setStatus('idle');
