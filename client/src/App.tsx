@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { sendAudioToServer } from './services/api';
@@ -23,6 +23,11 @@ function App() {
   const [recognizedText, setRecognizedText] = useState<string>('');
   const [lastRecording, setLastRecording] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string>('');
+  const activationSound = new Audio('/src/assets/sounds/beep.wav');
+
+  const playActivationSound = useCallback(() => {
+    activationSound.play().catch(console.error);
+  }, []);
 
   const setWakeWordDetectionState = (isDetecting: boolean) => {
     if (isDetecting) {
@@ -46,6 +51,7 @@ function App() {
     autoStopOnSilence: true,
     silenceThreshold: -50,
     silenceDuration: 2000,
+    onWakeWordDetected: playActivationSound,
     onRecordingComplete: async (audioBlob) => {
       console.log('Recording completed with size:', audioBlob.size);
       setLastRecording(audioBlob);

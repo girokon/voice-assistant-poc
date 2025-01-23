@@ -141,6 +141,7 @@ interface UseAudioRecorderProps {
   silenceThreshold?: number;
   silenceDuration?: number;
   onRecordingComplete?: (blob: Blob) => void;
+  onWakeWordDetected?: () => void;
 }
 
 interface UseAudioRecorderReturn {
@@ -159,6 +160,7 @@ export function useAudioRecorder({
   silenceThreshold = -50,
   silenceDuration = 2000,
   onRecordingComplete,
+  onWakeWordDetected,
 }: UseAudioRecorderProps = {}): UseAudioRecorderReturn {
   const [isListeningForWakeWord, setIsListeningForWakeWord] = useState(false);
   const [isRecordingState, setIsRecordingState] = useState(false);
@@ -183,6 +185,7 @@ export function useAudioRecorder({
 
       if (isListeningForWakeWord && !recorder.getIsRecording()) {
         console.log('Starting recording after wake word...');
+        onWakeWordDetected?.();
         recorder.startRecording();
       } else {
         console.log('Not starting recording:', {
@@ -191,7 +194,7 @@ export function useAudioRecorder({
             : 'already recording',
         });
       }
-    }, [isListeningForWakeWord]),
+    }, [isListeningForWakeWord, onWakeWordDetected]),
     enabled: isListeningForWakeWord,
   });
 
