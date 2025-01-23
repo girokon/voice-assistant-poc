@@ -1,0 +1,14 @@
+voice-assistant.localhost {
+    # Проксируем все API запросы на Express сервер
+    handle /api/* {
+        reverse_proxy localhost:3000
+    }
+
+    # Все остальные запросы идут на Vite dev server
+    handle {
+        reverse_proxy localhost:5173
+    }
+
+    # Включаем автоматический HTTPS
+    tls internal
+} 
