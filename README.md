@@ -14,6 +14,7 @@ project/
 │   ├── src/              # Server source files
 │   └── package.json      # Backend dependencies
 ├── Caddyfile             # Caddy server configuration
+├── .env                  # Environment variables
 ├── .prettierrc           # Prettier configuration
 └── package.json          # Root package.json for development
 ```
@@ -23,6 +24,17 @@ project/
 - Node.js (v18+ recommended)
 - Caddy server installed
 - Git
+- OpenAI API key
+
+## Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+You can get your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys).
 
 ## Development Setup
 
@@ -32,7 +44,9 @@ project/
 npm run install:all
 ```
 
-2. Start development servers:
+2. Create `.env` file with your OpenAI API key
+
+3. Start development servers:
 
 ```bash
 npm run dev
@@ -74,3 +88,4 @@ npm run format:check
 - **Backend**: Express.js with TypeScript
 - **HTTPS**: Caddy server as reverse proxy
 - **Development**: Hot Module Replacement (HMR) enabled
+- **AI**: OpenAI's Whisper for speech-to-text and GPT-4 for responses
