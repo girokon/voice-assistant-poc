@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { sendAudioToServer } from './services/api';
@@ -6,7 +6,7 @@ import { sendAudioToServer } from './services/api';
 function VoiceIndicator({
   status,
 }: {
-  status: 'idle' | 'listening' | 'responding';
+  status: 'idle' | 'detecting' | 'listening' | 'responding';
 }) {
   return (
     <div
@@ -17,34 +17,79 @@ function VoiceIndicator({
 }
 
 function App() {
-  const [status, setStatus] = useState<'idle' | 'listening' | 'responding'>(
-    'idle'
-  );
+  const [status, setStatus] = useState<
+    'idle' | 'detecting' | 'listening' | 'responding'
+  >('idle');
   const [recognizedText, setRecognizedText] = useState<string>('');
-  const { startRecording, stopRecording, isRecording, error } =
-    useAudioRecorder();
+  const {
+    stopRecording,
+    isRecording,
+    error,
+    isListeningForWakeWord,
+    startWakeWordDetection,
+    stopWakeWordDetection,
+  } = useAudioRecorder({
+    wakeWord: 'привет',
+    autoStopOnSilence: true,
+    silenceThreshold: -50,
+    silenceDuration: 2000,
+  });
+
+  useEffect(() => {
+    // Start wake word detection when component mounts
+    startWakeWordDetection();
+    setStatus('detecting');
+    setRecognizedText('Ожидаю ключевое слово "привет"...');
+
+    return () => {
+      stopWakeWordDetection();
+    };
+  }, []); // Empty dependencies since we only want this to run once on mount
+
+  useEffect(() => {
+    if (isRecording) {
+      setStatus('listening');
+      setRecognizedText('Слушаю...');
+    }
+  }, [isRecording]);
+
+  useEffect(() => {
+    if (isListeningForWakeWord && !isRecording) {
+      setStatus('detecting');
+      setRecognizedText('Ожидаю ключевое слово "привет"...');
+    }
+  }, [isListeningForWakeWord, isRecording]);
 
   const handleIndicatorClick = async () => {
     try {
       if (!isRecording) {
-        await startRecording();
-        setStatus('listening');
-        setRecognizedText('Listening...');
+        if (isListeningForWakeWord) {
+          // Stop wake word detection
+          stopWakeWordDetection();
+          setStatus('idle');
+          setRecognizedText('');
+        } else {
+          // Start wake word detection
+          startWakeWordDetection();
+          setStatus('detecting');
+          setRecognizedText('Ожидаю ключевое слово "привет"...');
+        }
       } else {
         setStatus('responding');
-        setRecognizedText('Processing...');
+        setRecognizedText('Обработка...');
         const audioBlob = await stopRecording();
 
         await sendAudioToServer(audioBlob);
 
-        // Return to initial state after sending
-        setStatus('idle');
-        setRecognizedText('Audio sent to server');
+        // Return to wake word detection
+        startWakeWordDetection();
+        setStatus('detecting');
+        setRecognizedText('Ожидаю ключевое слово "привет"...');
       }
     } catch (err) {
       setStatus('idle');
       setRecognizedText(
-        `Error: ${err instanceof Error ? err.message : String(err)}`
+        `Ошибка: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   };

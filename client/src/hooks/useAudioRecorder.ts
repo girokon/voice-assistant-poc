@@ -1,80 +1,257 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  useSpeechDetection,
+  SpeechRecognitionManager,
+} from './useSpeechDetection';
+import { SilenceDetector } from './useSilenceDetection';
+
+export class AudioRecorderManager {
+  private static instance: AudioRecorderManager;
+  private mediaRecorder: MediaRecorder | null = null;
+  private stream: MediaStream | null = null;
+  private audioChunks: Blob[] = [];
+  private isRecording = false;
+  private onSilenceCallback: (() => void) | null = null;
+  private error: string | null = null;
+  private onRecordingStateChange: (() => void) | null = null;
+
+  private constructor() {}
+
+  public static getInstance(): AudioRecorderManager {
+    if (!AudioRecorderManager.instance) {
+      AudioRecorderManager.instance = new AudioRecorderManager();
+    }
+    return AudioRecorderManager.instance;
+  }
+
+  public async startRecording(): Promise<void> {
+    try {
+      if (!this.stream) {
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+      }
+
+      const recorder = new MediaRecorder(this.stream, {
+        mimeType: 'audio/webm;codecs=opus',
+      });
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+
+      recorder.start(250);
+      this.mediaRecorder = recorder;
+      this.isRecording = true;
+      this.error = null;
+      this.audioChunks = [];
+      this.onRecordingStateChange?.();
+    } catch (err) {
+      this.error =
+        'Failed to start recording: ' +
+        (err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }
+
+  public async stopRecording(): Promise<Blob> {
+    return new Promise<Blob>((resolve, reject) => {
+      if (!this.mediaRecorder) {
+        reject(new Error('No recording in progress'));
+        return;
+      }
+
+      const handleStop = () => {
+        const audioBlob = new Blob(this.audioChunks, {
+          type: 'audio/webm;codecs=opus',
+        });
+
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.isRecording = false;
+
+        // First notify about state change
+        this.onRecordingStateChange?.();
+
+        // Then resume recognition in the next tick
+        setTimeout(() => {
+          const speechManager = SpeechRecognitionManager.getInstance();
+          speechManager.resumeAfterRecording();
+        }, 0);
+
+        resolve(audioBlob);
+      };
+
+      this.mediaRecorder.onstop = handleStop;
+      this.mediaRecorder.requestData();
+      this.mediaRecorder.stop();
+    });
+  }
+
+  public getIsRecording(): boolean {
+    return this.isRecording;
+  }
+
+  public getError(): string | null {
+    return this.error;
+  }
+
+  public cleanup(): void {
+    if (this.stream) {
+      this.stream.getTracks().forEach((track) => track.stop());
+      this.stream = null;
+    }
+  }
+
+  public setOnSilenceDetected(callback: () => void): void {
+    this.onSilenceCallback = callback;
+  }
+
+  public handleSilenceDetected(): void {
+    if (this.isRecording && this.onSilenceCallback) {
+      this.onSilenceCallback();
+    }
+  }
+
+  public getStream(): MediaStream | null {
+    return this.stream;
+  }
+
+  public setOnRecordingStateChange(callback: () => void): void {
+    this.onRecordingStateChange = callback;
+  }
+}
+
+interface UseAudioRecorderProps {
+  wakeWord?: string;
+  autoStopOnSilence?: boolean;
+  silenceThreshold?: number;
+  silenceDuration?: number;
+}
 
 interface UseAudioRecorderReturn {
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<Blob>;
   isRecording: boolean;
   error: string | null;
+  isListeningForWakeWord: boolean;
+  startWakeWordDetection: () => void;
+  stopWakeWordDetection: () => void;
 }
 
-export function useAudioRecorder(): UseAudioRecorderReturn {
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(
-    null
-  );
-  const [isRecording, setIsRecording] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+export function useAudioRecorder({
+  wakeWord = 'привет',
+  autoStopOnSilence = true,
+  silenceThreshold = -50,
+  silenceDuration = 2000,
+}: UseAudioRecorderProps = {}): UseAudioRecorderReturn {
+  const [isListeningForWakeWord, setIsListeningForWakeWord] = useState(false);
+  const [isRecordingState, setIsRecordingState] = useState(false);
+  const recorder = AudioRecorderManager.getInstance();
+  const silenceDetector = SilenceDetector.getInstance();
 
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          setAudioChunks((chunks) => [...chunks, event.data]);
-        }
-      };
-
-      // Request data every 250ms to get a smoother audio stream
-      recorder.start(250);
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-      setError(null);
-      setAudioChunks([]);
-    } catch (err) {
-      setError(
-        'Failed to start recording: ' +
-          (err instanceof Error ? err.message : String(err))
-      );
-    }
+  // Follow the recording state
+  useEffect(() => {
+    recorder.setOnRecordingStateChange(() => {
+      setIsRecordingState(recorder.getIsRecording());
+    });
   }, []);
 
-  const stopRecording = useCallback(async () => {
-    return new Promise<Blob>((resolve, reject) => {
-      if (!mediaRecorder) {
-        reject(new Error('No recording in progress'));
-        return;
-      }
+  // Handle wake word detection
+  useSpeechDetection({
+    wakeWord,
+    onWakeWordDetected: useCallback(() => {
+      console.log('Wake word callback triggered:', {
+        isListeningForWakeWord,
+        isRecording: recorder.getIsRecording(),
+      });
 
-      // Add final handler for any remaining audio data
-      const handleStop = () => {
-        const audioBlob = new Blob(audioChunks, {
-          type: 'audio/webm;codecs=opus',
+      if (isListeningForWakeWord && !recorder.getIsRecording()) {
+        console.log('Starting recording after wake word...');
+        recorder.startRecording();
+      } else {
+        console.log('Not starting recording:', {
+          reason: !isListeningForWakeWord
+            ? 'not listening for wake word'
+            : 'already recording',
         });
-        resolve(audioBlob);
+      }
+    }, [isListeningForWakeWord]),
+    enabled: isListeningForWakeWord,
+  });
 
-        // Stop all tracks and cleanup
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-        setMediaRecorder(null);
-        setAudioChunks([]);
-      };
+  // Configure silence detection
+  useEffect(() => {
+    if (!autoStopOnSilence || !isRecordingState) {
+      console.log('Stopping silence detection:', {
+        autoStopOnSilence,
+        isRecording: isRecordingState,
+      });
+      silenceDetector.stop();
+      return;
+    }
 
-      mediaRecorder.onstop = handleStop;
+    const stream = recorder.getStream();
+    if (!stream) {
+      console.log('No stream available for silence detection');
+      return;
+    }
 
-      // Request any final chunks of data
-      mediaRecorder.requestData();
-      mediaRecorder.stop();
-      setIsRecording(false);
+    console.log('Configuring silence detection:', {
+      threshold: silenceThreshold,
+      duration: silenceDuration,
+      hasStream: !!stream,
     });
-  }, [mediaRecorder, audioChunks]);
+
+    silenceDetector.setConfig(silenceThreshold, silenceDuration);
+    silenceDetector.setOnSilenceDetected(async () => {
+      if (recorder.getIsRecording()) {
+        console.log('Silence detected, stopping recording');
+        try {
+          const audioBlob = await recorder.stopRecording();
+          console.log('Recording stopped successfully after silence', {
+            blobSize: audioBlob.size,
+          });
+        } catch (error) {
+          console.error('Failed to stop recording after silence:', error);
+        }
+      }
+    });
+
+    silenceDetector.start(stream);
+
+    return () => {
+      silenceDetector.stop();
+    };
+  }, [autoStopOnSilence, silenceThreshold, silenceDuration, isRecordingState]);
+
+  const startWakeWordDetection = useCallback(() => {
+    console.log('Starting wake word detection');
+    setIsListeningForWakeWord(true);
+  }, []);
+
+  const stopWakeWordDetection = useCallback(() => {
+    console.log('Stopping wake word detection');
+    setIsListeningForWakeWord(false);
+  }, []);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      recorder.cleanup();
+      silenceDetector.stop();
+    };
+  }, []);
 
   return {
-    startRecording,
-    stopRecording,
-    isRecording,
-    error,
+    startRecording: () => recorder.startRecording(),
+    stopRecording: () => recorder.stopRecording(),
+    isRecording: recorder.getIsRecording(),
+    error: recorder.getError(),
+    isListeningForWakeWord,
+    startWakeWordDetection,
+    stopWakeWordDetection,
   };
 }

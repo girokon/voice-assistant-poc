@@ -27,6 +27,7 @@
   border: none;
   cursor: pointer;
   padding: 0;
+  outline: none;
 }
 
 .voice-button:focus {
@@ -38,24 +39,30 @@
 }
 
 .voice-indicator {
-  width: 120px;
-  height: 120px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .voice-indicator.idle {
-  background-color: #718096;
+  background-color: #e0e0e0;
+}
+
+.voice-indicator.detecting {
+  background-color: #90caf9;
+  animation: pulse 2s infinite;
 }
 
 .voice-indicator.listening {
-  background-color: #e53e3e;
-  animation: pulse 1.5s ease-in-out infinite;
+  background-color: #4caf50;
+  animation: wave 1.5s infinite;
 }
 
 .voice-indicator.responding {
-  background-color: #718096;
-  animation: vibrate 0.3s ease-in-out infinite;
+  background-color: #ff9800;
+  animation: spin 1s infinite linear;
 }
 
 .recognized-text {
@@ -74,29 +81,41 @@
 @keyframes pulse {
   0% {
     transform: scale(1);
+    opacity: 1;
   }
   50% {
     transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes wave {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(0.9);
   }
   100% {
     transform: scale(1);
   }
 }
 
-@keyframes vibrate {
-  0% {
-    transform: translate(0);
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
   }
-  25% {
-    transform: translate(-2px, 2px);
-  }
-  50% {
-    transform: translate(2px, -2px);
-  }
-  75% {
-    transform: translate(-2px, -2px);
-  }
-  100% {
-    transform: translate(0);
+  to {
+    transform: rotate(360deg);
   }
 }
