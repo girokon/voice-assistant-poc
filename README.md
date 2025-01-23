@@ -14,6 +14,7 @@ project/
 │   ├── src/              # Server source files
 │   └── package.json      # Backend dependencies
 ├── Caddyfile             # Caddy server configuration
+├── .prettierrc           # Prettier configuration
 └── package.json          # Root package.json for development
 ```
 
@@ -50,6 +51,22 @@ This will start:
 - `npm run dev:server` - Start only backend
 - `npm run dev:caddy` - Start only Caddy server
 - `npm run install:all` - Install dependencies for all packages
+- `npm run format` - Format all files using Prettier
+- `npm run format:check` - Check if files are formatted correctly
+
+## Code Style
+
+The project uses Prettier for code formatting with default settings. You can format your code using:
+
+```bash
+npm run format
+```
+
+Or check if files are formatted correctly using:
+
+```bash
+npm run format:check
+```
 
 ## Architecture
 
