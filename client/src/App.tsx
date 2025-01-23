@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import { useAudioRecorder } from './hooks/useAudioRecorder';
 import { sendAudioToServer } from './services/api';
+import ReactMarkdown from 'react-markdown';
 
 function VoiceIndicator({
   status,
@@ -21,6 +22,7 @@ function App() {
     'idle' | 'detecting' | 'listening' | 'responding'
   >('idle');
   const [recognizedText, setRecognizedText] = useState<string>('');
+  const [assistantResponse, setAssistantResponse] = useState<string>('');
   const [lastRecording, setLastRecording] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string>('');
   const activationSound = new Audio('/src/assets/sounds/beep.wav');
@@ -59,7 +61,9 @@ function App() {
       setRecognizedText('Обработка...');
 
       try {
-        await sendAudioToServer(audioBlob);
+        const response = await sendAudioToServer(audioBlob);
+        setRecognizedText(response.transcription);
+        setAssistantResponse(response.response);
         startWakeWordDetection();
         setWakeWordDetectionState(true);
       } catch (err) {
@@ -106,7 +110,9 @@ function App() {
         setRecognizedText('Обработка...');
         const audioBlob = await stopRecording();
         setLastRecording(audioBlob);
-        await sendAudioToServer(audioBlob);
+        const response = await sendAudioToServer(audioBlob);
+        setRecognizedText(response.transcription);
+        setAssistantResponse(response.response);
         startWakeWordDetection();
         setWakeWordDetectionState(true);
       } else {
@@ -149,6 +155,11 @@ function App() {
           )}
         </div>
       </div>
+      {assistantResponse && (
+        <div className="assistant-response">
+          <ReactMarkdown>{assistantResponse}</ReactMarkdown>
+        </div>
+      )}
     </div>
   );
 }

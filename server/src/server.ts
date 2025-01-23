@@ -3,12 +3,22 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import { OpenAIService } from './services/OpenAIService.js';
+
+// Load environment variables
+dotenv.config({ path: '../.env' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('OPENAI_API_KEY is required in .env file');
+}
+
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
+const openAIService = new OpenAIService(process.env.OPENAI_API_KEY);
 
 // Middleware
 app.use(cors());
@@ -34,15 +44,18 @@ apiRouter.post(
         return;
       }
 
-      // For now, just confirm receiving the file
-      console.log('Received audio file:', {
-        filename: file.originalname,
-        size: file.size,
-        mimetype: file.mimetype,
-      });
+      // Transcribe audio using OpenAI Whisper
+      const transcription = await openAIService.transcribeAudio(file.buffer);
 
-      res.json({ message: 'Audio received successfully' });
+      // Get chat response based on transcription
+      const response = await openAIService.getChatResponse(transcription);
+
+      res.json({
+        transcription,
+        response,
+      });
     } catch (error) {
+      console.error('Error processing audio:', error);
       next(error);
     }
   }

@@ -1,6 +1,13 @@
 const API_BASE_URL = 'https://voice-assistant.localhost/api';
 
-export async function sendAudioToServer(audioBlob: Blob): Promise<void> {
+interface ServerResponse {
+  transcription: string;
+  response: string;
+}
+
+export async function sendAudioToServer(
+  audioBlob: Blob
+): Promise<ServerResponse> {
   const formData = new FormData();
   formData.append('audio', audioBlob, 'recording.webm');
 
@@ -12,4 +19,6 @@ export async function sendAudioToServer(audioBlob: Blob): Promise<void> {
   if (!response.ok) {
     throw new Error(`Failed to send audio: ${response.statusText}`);
   }
+
+  return response.json();
 }
