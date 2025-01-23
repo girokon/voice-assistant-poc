@@ -21,6 +21,8 @@ function App() {
     'idle' | 'detecting' | 'listening' | 'responding'
   >('idle');
   const [recognizedText, setRecognizedText] = useState<string>('');
+  const [lastRecording, setLastRecording] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string>('');
   const {
     stopRecording,
     isRecording,
@@ -33,6 +35,24 @@ function App() {
     autoStopOnSilence: true,
     silenceThreshold: -50,
     silenceDuration: 2000,
+    onRecordingComplete: async (audioBlob) => {
+      console.log('Recording completed with size:', audioBlob.size);
+      setLastRecording(audioBlob);
+      setStatus('responding');
+      setRecognizedText('Обработка...');
+
+      try {
+        await sendAudioToServer(audioBlob);
+        startWakeWordDetection();
+        setStatus('detecting');
+        setRecognizedText('Ожидаю ключевое слово "привет"...');
+      } catch (err) {
+        setStatus('idle');
+        setRecognizedText(
+          `Ошибка: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    },
   });
 
   useEffect(() => {
@@ -60,6 +80,18 @@ function App() {
     }
   }, [isListeningForWakeWord, isRecording]);
 
+  useEffect(() => {
+    if (lastRecording) {
+      const url = URL.createObjectURL(lastRecording);
+      setAudioUrl(url);
+      console.log('Created new audio URL:', url, 'for blob:', lastRecording);
+      return () => {
+        URL.revokeObjectURL(url);
+        console.log('Revoked audio URL:', url);
+      };
+    }
+  }, [lastRecording]);
+
   const handleIndicatorClick = async () => {
     try {
       if (!isRecording) {
@@ -78,6 +110,7 @@ function App() {
         setStatus('responding');
         setRecognizedText('Обработка...');
         const audioBlob = await stopRecording();
+        setLastRecording(audioBlob);
 
         await sendAudioToServer(audioBlob);
 
@@ -107,6 +140,15 @@ function App() {
         {(recognizedText || error) && (
           <p className="recognized-text">{error || recognizedText}</p>
         )}
+        <div className="audio-player">
+          <audio key={audioUrl} src={audioUrl} controls />
+          {lastRecording && (
+            <div className="debug-info">
+              Size: {(lastRecording.size / 1024).toFixed(1)}KB Type:{' '}
+              {lastRecording.type}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

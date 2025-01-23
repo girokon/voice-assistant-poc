@@ -84,9 +84,20 @@ export class AudioRecorderManager {
         resolve(audioBlob);
       };
 
-      this.mediaRecorder.onstop = handleStop;
-      this.mediaRecorder.requestData();
-      this.mediaRecorder.stop();
+      try {
+        this.mediaRecorder.onstop = handleStop;
+        // Request data before stopping
+        this.mediaRecorder.requestData();
+        // Small timeout to ensure data is collected
+        setTimeout(() => {
+          if (this.mediaRecorder) {
+            this.mediaRecorder.stop();
+          }
+        }, 100);
+      } catch (e) {
+        this.isRecording = false;
+        reject(e);
+      }
     });
   }
 
@@ -129,6 +140,7 @@ interface UseAudioRecorderProps {
   autoStopOnSilence?: boolean;
   silenceThreshold?: number;
   silenceDuration?: number;
+  onRecordingComplete?: (blob: Blob) => void;
 }
 
 interface UseAudioRecorderReturn {
@@ -146,6 +158,7 @@ export function useAudioRecorder({
   autoStopOnSilence = true,
   silenceThreshold = -50,
   silenceDuration = 2000,
+  onRecordingComplete,
 }: UseAudioRecorderProps = {}): UseAudioRecorderReturn {
   const [isListeningForWakeWord, setIsListeningForWakeWord] = useState(false);
   const [isRecordingState, setIsRecordingState] = useState(false);
@@ -214,6 +227,7 @@ export function useAudioRecorder({
           console.log('Recording stopped successfully after silence', {
             blobSize: audioBlob.size,
           });
+          onRecordingComplete?.(audioBlob);
         } catch (error) {
           console.error('Failed to stop recording after silence:', error);
         }
@@ -225,7 +239,13 @@ export function useAudioRecorder({
     return () => {
       silenceDetector.stop();
     };
-  }, [autoStopOnSilence, silenceThreshold, silenceDuration, isRecordingState]);
+  }, [
+    autoStopOnSilence,
+    silenceThreshold,
+    silenceDuration,
+    isRecordingState,
+    onRecordingComplete,
+  ]);
 
   const startWakeWordDetection = useCallback(() => {
     console.log('Starting wake word detection');
