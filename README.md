@@ -35,11 +35,13 @@ project/
 Create a `.env` file in the root directory with the following variables:
 
 ```bash
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4-turbo-preview  # OpenAI model to use for chat responses
+OPENAI_API_KEY=your_openai_api_key_here      # OpenAI API key for AI functionality
+OPENAI_MODEL=gpt-4                           # OpenAI model to use for chat responses
+TOMORROW_API_KEY=your_tomorrow_api_key_here  # Tomorrow.io API key for weather data
 ```
 
 You can get your OpenAI API key from [OpenAI Platform](https://platform.openai.com/api-keys).
+You can get your Tomorrow.io API key from [Tomorrow.io](https://www.tomorrow.io/).
 
 ## Development Setup
 
