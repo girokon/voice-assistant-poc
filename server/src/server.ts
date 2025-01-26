@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { OpenAIService } from './services/OpenAIService.js';
+import { FunctionsBag } from './services/FunctionsBag.js';
+import { WeatherFunction } from './services/functions/WeatherFunction.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });
@@ -22,11 +24,18 @@ if (!process.env.OPENAI_MODEL) {
   throw new Error('OPENAI_MODEL is required in .env file');
 }
 
+// Initialize FunctionsBag and register functions
+const functionsBag = new FunctionsBag();
+functionsBag.registerFunction(new WeatherFunction());
+
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 const upload = multer({ storage: multer.memoryStorage() });
-const openAIService = new OpenAIService(process.env.OPENAI_API_KEY);
+const openAIService = new OpenAIService(
+  process.env.OPENAI_API_KEY,
+  functionsBag
+);
 
 // Middleware
 app.use(cors());
