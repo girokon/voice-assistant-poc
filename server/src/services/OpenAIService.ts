@@ -2,9 +2,15 @@ import OpenAI from 'openai';
 
 export class OpenAIService {
   private openai: OpenAI;
+  private model: string;
 
   constructor(apiKey: string) {
     this.openai = new OpenAI({ apiKey });
+
+    if (!process.env.OPENAI_MODEL) {
+      throw new Error('OPENAI_MODEL is required in .env file');
+    }
+    this.model = process.env.OPENAI_MODEL;
   }
 
   async transcribeAudio(audioBuffer: Buffer): Promise<string> {
@@ -23,7 +29,7 @@ export class OpenAIService {
 
   async *streamChatResponse(transcription: string) {
     const stream = await this.openai.chat.completions.create({
-      model: 'gpt-4',
+      model: this.model,
       messages: [
         {
           role: 'system',
@@ -48,7 +54,7 @@ export class OpenAIService {
   // Keep the old method for compatibility
   async getChatResponse(transcription: string): Promise<string> {
     const response = await this.openai.chat.completions.create({
-      model: 'gpt-4',
+      model: this.model,
       messages: [
         {
           role: 'system',

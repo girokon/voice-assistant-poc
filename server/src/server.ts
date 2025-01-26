@@ -18,6 +18,10 @@ if (!process.env.OPENAI_API_KEY) {
   throw new Error('OPENAI_API_KEY is required in .env file');
 }
 
+if (!process.env.OPENAI_MODEL) {
+  throw new Error('OPENAI_MODEL is required in .env file');
+}
+
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
