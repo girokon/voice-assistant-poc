@@ -1,17 +1,18 @@
+import dotenv from 'dotenv';
+
+// Load environment variables first, before any other imports
+dotenv.config({ path: '../.env' });
+
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { OpenAIService } from './services/OpenAIService.js';
 import { FunctionsBag } from './services/FunctionsBag.js';
 import { WeatherFunction } from './services/functions/WeatherFunction.js';
-
-// Load environment variables
-dotenv.config({ path: '../.env' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
