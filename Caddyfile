@@ -1,4 +1,13 @@
 voice-assistant.localhost {
+    # Проксируем WebSocket соединения на Express сервер
+    handle /ws {
+        reverse_proxy localhost:3000 {
+            transport http {
+                versions h1
+            }
+        }
+    }
+
     # Проксируем все API запросы на Express сервер
     handle /api/* {
         reverse_proxy localhost:3000

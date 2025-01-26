@@ -1,7 +1,4 @@
 import OpenAI from 'openai';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 
 export class OpenAIService {
   private openai: OpenAI;
@@ -11,26 +8,47 @@ export class OpenAIService {
   }
 
   async transcribeAudio(audioBuffer: Buffer): Promise<string> {
-    // Create a temporary file
-    const tmpFile = path.join(os.tmpdir(), `audio-${Date.now()}.webm`);
-    await fs.promises.writeFile(tmpFile, audioBuffer);
-
     try {
       const response = await this.openai.audio.transcriptions.create({
-        file: fs.createReadStream(tmpFile),
+        file: new File([audioBuffer], 'audio.wav', { type: 'audio/wav' }),
         model: 'whisper-1',
       });
 
       return response.text;
-    } finally {
-      // Clean up the temporary file
-      await fs.promises.unlink(tmpFile).catch(console.error);
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      throw error;
     }
   }
 
+  async *streamChatResponse(transcription: string) {
+    const stream = await this.openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: 'Ты умный помощник, реализованный ввиде умной колонки',
+        },
+        {
+          role: 'user',
+          content: transcription,
+        },
+      ],
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        yield content;
+      }
+    }
+  }
+
+  // Keep the old method for compatibility
   async getChatResponse(transcription: string): Promise<string> {
     const response = await this.openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4',
       messages: [
         {
           role: 'system',

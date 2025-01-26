@@ -4,18 +4,21 @@ import {
   SpeechRecognitionManager,
 } from './useSpeechDetection';
 import { SilenceDetector } from './useSilenceDetection';
+import { WebSocketService } from '../services/WebSocketService';
 
 export class AudioRecorderManager {
   private static instance: AudioRecorderManager;
   private mediaRecorder: MediaRecorder | null = null;
   private stream: MediaStream | null = null;
-  private audioChunks: Blob[] = [];
   private isRecording = false;
   private onSilenceCallback: (() => void) | null = null;
   private error: string | null = null;
   private onRecordingStateChange: (() => void) | null = null;
+  private wsService: WebSocketService;
 
-  private constructor() {}
+  private constructor() {
+    this.wsService = WebSocketService.getInstance();
+  }
 
   public static getInstance(): AudioRecorderManager {
     if (!AudioRecorderManager.instance) {
@@ -26,10 +29,20 @@ export class AudioRecorderManager {
 
   public async startRecording(): Promise<void> {
     try {
+      if (this.isRecording) {
+        console.log('Recording already in progress');
+        return;
+      }
+
+      // Ensure WebSocket connection is established first
+      this.wsService.connect();
+
       if (!this.stream) {
+        console.log('Requesting microphone access...');
         this.stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
+        console.log('Microphone access granted');
       }
 
       const recorder = new MediaRecorder(this.stream, {
@@ -38,17 +51,21 @@ export class AudioRecorderManager {
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
+          console.log('Audio chunk available:', event.data.size, 'bytes');
+          // Send each chunk through WebSocket
+          this.wsService.sendAudioChunk(event.data);
         }
       };
 
-      recorder.start(250);
+      console.log('Starting MediaRecorder...');
+      recorder.start(250); // Send chunks every 250ms
       this.mediaRecorder = recorder;
       this.isRecording = true;
       this.error = null;
-      this.audioChunks = [];
       this.onRecordingStateChange?.();
+      console.log('Recording started successfully');
     } catch (err) {
+      console.error('Failed to start recording:', err);
       this.error =
         'Failed to start recording: ' +
         (err instanceof Error ? err.message : String(err));
@@ -56,21 +73,22 @@ export class AudioRecorderManager {
     }
   }
 
-  public async stopRecording(): Promise<Blob> {
-    return new Promise<Blob>((resolve, reject) => {
-      if (!this.mediaRecorder) {
+  public async stopRecording(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.mediaRecorder || !this.isRecording) {
+        console.log('No recording in progress');
         reject(new Error('No recording in progress'));
         return;
       }
 
+      console.log('Stopping recording...');
       const handleStop = () => {
-        const audioBlob = new Blob(this.audioChunks, {
-          type: 'audio/webm;codecs=opus',
-        });
-
         this.mediaRecorder = null;
-        this.audioChunks = [];
         this.isRecording = false;
+
+        // Send end of audio signal
+        console.log('Sending end-of-audio signal');
+        this.wsService.sendEndOfAudio();
 
         // First notify about state change
         this.onRecordingStateChange?.();
@@ -81,7 +99,8 @@ export class AudioRecorderManager {
           speechManager.resumeAfterRecording();
         }, 0);
 
-        resolve(audioBlob);
+        console.log('Recording stopped successfully');
+        resolve();
       };
 
       try {
@@ -95,6 +114,7 @@ export class AudioRecorderManager {
           }
         }, 100);
       } catch (e) {
+        console.error('Error stopping recording:', e);
         this.isRecording = false;
         reject(e);
       }
@@ -114,6 +134,7 @@ export class AudioRecorderManager {
       this.stream.getTracks().forEach((track) => track.stop());
       this.stream = null;
     }
+    this.wsService.disconnect();
   }
 
   public setOnSilenceDetected(callback: () => void): void {
@@ -133,6 +154,18 @@ export class AudioRecorderManager {
   public setOnRecordingStateChange(callback: () => void): void {
     this.onRecordingStateChange = callback;
   }
+
+  public setOnTranscription(callback: (text: string) => void): void {
+    this.wsService.setOnTranscription(callback);
+  }
+
+  public setOnResponse(callback: (text: string) => void): void {
+    this.wsService.setOnResponse(callback);
+  }
+
+  public setOnError(callback: (error: string) => void): void {
+    this.wsService.setOnError(callback);
+  }
 }
 
 interface UseAudioRecorderProps {
@@ -146,7 +179,7 @@ interface UseAudioRecorderProps {
 
 interface UseAudioRecorderReturn {
   startRecording: () => Promise<void>;
-  stopRecording: () => Promise<Blob>;
+  stopRecording: () => Promise<void>;
   isRecording: boolean;
   error: string | null;
   isListeningForWakeWord: boolean;
@@ -226,11 +259,9 @@ export function useAudioRecorder({
       if (recorder.getIsRecording()) {
         console.log('Silence detected, stopping recording');
         try {
-          const audioBlob = await recorder.stopRecording();
-          console.log('Recording stopped successfully after silence', {
-            blobSize: audioBlob.size,
-          });
-          onRecordingComplete?.(audioBlob);
+          await recorder.stopRecording();
+          console.log('Recording stopped successfully after silence');
+          onRecordingComplete?.(new Blob([]));
         } catch (error) {
           console.error('Failed to stop recording after silence:', error);
         }
